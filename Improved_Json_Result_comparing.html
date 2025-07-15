@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Enhanced Python Dictionary Comparison Tool</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            line-height: 1.6;
+        }
+        pre {
+            background-color: #f5f5f5;
+            padding: 10px;
+            border-radius: 5px;
+            overflow: auto;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+        h2 {
+            color: #333;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 10px;
+            font-family: monospace;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        .error {
+            color: red;
+            font-weight: bold;
+        }
+        .match {
+            color: green;
+            font-weight: bold;
+        }
+        .diff {
+            color: #ff9800;
+            font-weight: bold;
+        }
+        .warning {
+            color: #ff6b35;
+            font-weight: bold;
+        }
+        .options {
+            margin: 15px 0;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+        }
+        .option-item {
+            margin-bottom: 8px;
+        }
+        .note {
+            margin-top: 5px;
+            font-size: 0.9em;
+            color: #666;
+        }
+        .summary {
+            background-color: #e8f4f8;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 15px 0;
+        }
+        .matching-info {
+            background-color: #fff3cd;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+            border-left: 4px solid #ffc107;
+        }
+        .collapsible {
+            background-color: #f1f1f1;
+            color: #444;
+            cursor: pointer;
+            padding: 12px;
+            width: 100%;
+            border: none;
+            text-align: left;
+            outline: none;
+            font-size: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .collapsible:hover {
+            background-color: #ddd;
+        }
+        .collapsible.active {
+            background-color: #ccc;
+        }
+        .collapsible-content {
+            display: none;
+            padding: 0 15px;
+            background-color: #f9f9f9;
+            border-radius: 0 0 5px 5px;
+            margin-bottom: 10px;
+        }
+        .collapsible-arrow {
+            transition: transform 0.3s ease;
+        }
+        .collapsible.active .collapsible-arrow {
+            transform: rotate(90deg);
+        }
+        .input-container {
+            margin-bottom: 15px;
+        }
+        .file-status {
+            margin-top: 10px;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 0.9em;
+        }
+        .file-success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .file-error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Enhanced Python Dictionary Comparison Tool</h2>
+        <h5>Built on Claude Sonnet 4, Enhanced with Order Matching</h5>
+        
+        <div class="options">
+            <h3>Comparison Options</h3>
+            <div class="option-item">
+                <label>
+                    <input type="checkbox" id="ignoreCase" checked> 
+                    Ignore case for string values
+                </label>
+            </div>
+            <div class="option-item">
+                <label>
+                    <input type="checkbox" id="ignoreWhitespace" checked> 
+                    Ignore whitespace in string values
+                </label>
+            </div>
+            <div class="option-item">
+                <label>
+                    <input type="checkbox" id="ignoreNone" checked> 
+                    Treat None and null as equal
+                </label>
+            </div>
+            <div class="option-item">
+                <label>
+                    Keys to ignore (comma separated): 
+                    <input type="text" id="ignoreKeys" placeholder="e.g., rn,detail_id,timestamp">
+                </label>
+            </div>
+            <div class="option-item">
+                <label>
+                    Matching keys (comma separated): 
+                    <input type="text" id="matchingKeys" placeholder="e.g., id,name,email (keys used to match dictionaries)">
+                </label>
+                <div class="note">Keys that uniquely identify each dictionary for matching across different orders</div>
+            </div>
+            <div class="option-item">
+                <label>
+                    <input type="checkbox" id="enableOrderMatching" checked> 
+                    Enable order-independent matching
+                </label>
+                <div class="note">When enabled, dictionaries will be matched based on content rather than position</div>
+            </div>
+        </div>
+        
+        <div>
+            <h3>First Dataset:</h3>
+            <div class="option-item">
+                <label>
+                    <input type="radio" name="input1Type" value="text" checked> 
+                    Paste text
+                </label>
+                <label style="margin-left: 20px;">
+                    <input type="radio" name="input1Type" value="file"> 
+                    Upload JSON file
+                </label>
+            </div>
+            <div id="textInput1" class="input-container">
+                <p class="note">Paste in Python dictionary format (can handle multiple dictionaries)</p>
+                <textarea id="dict1" placeholder="Paste your first set of dictionaries here..."></textarea>
+            </div>
+            <div id="fileInput1" class="input-container" style="display: none;">
+                <p class="note">Upload a JSON file containing a single dictionary or an array of dictionaries</p>
+                <input type="file" id="file1" accept=".json" />
+                <div id="file1Status" class="file-status"></div>
+            </div>
+        </div>
+        
+        <div>
+            <h3>Second Dataset:</h3>
+            <div class="option-item">
+                <label>
+                    <input type="radio" name="input2Type" value="text" checked> 
+                    Paste text
+                </label>
+                <label style="margin-left: 20px;">
+                    <input type="radio" name="input2Type" value="file"> 
+                    Upload JSON file
+                </label>
+            </div>
+            <div id="textInput2" class="input-container">
+                <p class="note">Paste in Python or JSON dictionary format (can handle multiple dictionaries)</p>
+                <textarea id="dict2" placeholder="Paste your second set of dictionaries here..."></textarea>
+            </div>
+            <div id="fileInput2" class="input-container" style="display: none;">
+                <p class="note">Upload a JSON file containing a single dictionary or an array of dictionaries</p>
+                <input type="file" id="file2" accept=".json" />
+                <div id="file2Status" class="file-status"></div>
+            </div>
+        </div>
+        
+        <button id="compareBtn">Compare Dictionaries</button>
+        
+        <div id="results" style="margin-top: 20px;"></div>
+    </div>
+    
+    <script>
+        // Global variables to store file data
+        let fileData1 = null;
+        let fileData2 = null;
+        
+        // Handle input type switching
+        document.addEventListener('DOMContentLoaded', function() {
+            // Set up radio button listeners for input type 1
+            document.querySelectorAll('input[name="input1Type"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const textContainer = document.getElementById('textInput1');
+                    const fileContainer = document.getElementById('fileInput1');
+                    
+                    if (this.value === 'text') {
+                        textContainer.style.display = 'block';
+                        fileContainer.style.display = 'none';
+                        fileData1 = null;
+                    } else {
+                        textContainer.style.display = 'none';
+                        fileContainer.style.display = 'block';
+                    }
+                });
+            });
+            
+            // Set up radio button listeners for input type 2
+            document.querySelectorAll('input[name="input2Type"]').forEach(radio => {
+                radio.addEventListener('change', function() {
+                    const textContainer = document.getElementById('textInput2');
+                    const fileContainer = document.getElementById('fileInput2');
+                    
+                    if (this.value === 'text') {
+                        textContainer.style.display = 'block';
+                        fileContainer.style.display = 'none';
+                        fileData2 = null;
+                    } else {
+                        textContainer.style.display = 'none';
+                        fileContainer.style.display = 'block';
+                    }
+                });
+            });
+            
+            // Set up file input handlers
+            document.getElementById('file1').addEventListener('change', function(e) {
+                handleFileUpload(e, 'file1Status', 1);
+            });
+            
+            document.getElementById('file2').addEventListener('change', function(e) {
+                handleFileUpload(e, 'file2Status', 2);
+            });
+        });
+        
+        // Handle file upload
+        function handleFileUpload(event, statusElementId, fileNumber) {
+            const file = event.target.files[0];
+            const statusElement = document.getElementById(statusElementId);
+            
+            if (!file) {
+                statusElement.innerHTML = '';
+                if (fileNumber === 1) fileData1 = null;
+                else fileData2 = null;
+                return;
+            }
+            
+            if (!file.name.toLowerCase().endsWith('.json')) {
+                statusElement.innerHTML = '<div class="file-error">Please select a JSON file</div>';
+                if (fileNumber === 1) fileData1 = null;
+                else fileData2 = null;
+                return;
+            }
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const jsonData = JSON.parse(e.target.result);
+                    if (fileNumber === 1) {
+                        fileData1 = jsonData;
+                    } else {
+                        fileData2 = jsonData;
+                    }
+                    
+                    const dataType = Array.isArray(jsonData) ? 'array' : 'object';
+                    const count = Array.isArray(jsonData) ? jsonData.length : 1;
+                    
+                    statusElement.innerHTML = `<div class="file-success">✓ Successfully loaded ${count} ${dataType === 'array' ? 'dictionaries' : 'dictionary'} from ${file.name}</div>`;
+                } catch (error) {
+                    statusElement.innerHTML = `<div class="file-error">Error parsing JSON: ${error.message}</div>`;
+                    if (fileNumber === 1) fileData1 = null;
+                    else fileData2 = null;
+                }
+            };
+            
+            reader.onerror = function() {
+                statusElement.innerHTML = '<div class="file-error">Error reading file</div>';
+                if (fileNumber === 1) fileData1 = null;
+                else fileData2 = null;
+            };
+            
+            reader.readAsText(file);
+        }
+        
+        // Toggle collapsible sections
+        function toggleCollapsible(element) {
+            element.classList.toggle("active");
+            const content = element.nextElementSibling;
+            if (content.style.display === "block") {
+                content.style.display = "none";
+            } else {
+                content.style.display = "block";
+            }
+        }
+        
+        // Get input data based on selected input type
+        function getInputData(inputNumber) {
+            const inputType = document.querySelector(`input[name="input${inputNumber}Type"]:checked`).value;
+            
+            if (inputType === 'file') {
+                const data = inputNumber === 1 ? fileData1 : fileData2;
+                if (!data) {
+                    throw new Error(`No file data loaded for dataset ${inputNumber}`);
+                }
+                // Extract the main array from the file data
+                return extractDataArray(data);
+            } else {
+                const textInput = document.getElementById(`dict${inputNumber}`).value;
+                return parseInput(textInput);
+            }
+        }
+        // Special brute-force parser for Python dictionaries
+        function bruteForceParsePythonDicts(input) {
+            const dicts = [];
+            let start = -1;
+            let braceCount = 0;
+            
+            for (let i = 0; i < input.length; i++) {
+                if (input[i] === '{') {
+                    if (start === -1) {
+                        start = i;
+                    }
+                    braceCount++;
+                } 
+                else if (input[i] === '}') {
+                    braceCount--;
+                    if (braceCount === 0 && start !== -1) {
+                        const dictStr = input.substring(start, i + 1);
+                        try {
+                            const dict = processPythonDict(dictStr);
+                            dicts.push(dict);
+                        } catch (e) {
+                            console.error("Error processing dictionary:", e.message);
+                        }
+                        start = -1;
+                    }
+                }
+            }
+            
+            return dicts;
+        }
+        
+        // Process a single Python dictionary string
+        function processPythonDict(dictStr) {
+            let processed = dictStr
+                .replace(/None/g, "null")
+                .replace(/True/g, "true")
+                .replace(/False/g, "false");
+            
+            processed = processed.replace(/(\d{4}-\d{2}-\d{2}T\d{2}):\s+(\d{2}):\s+(\d{2}Z)/g, "$1:$2:$3");
+            
+            processed = processed
+                .replace(/'([^']+)':/g, '"$1":')
+                .replace(/:\s*'([^']*)'/g, ':"$1"');
+            
+            try {
+                return JSON.parse(processed);
+            } catch (e) {
+                throw new Error(`Failed to parse dict: ${e.message}`);
+            }
+        }
+        
+        // NEW: Function to find the primary array of objects within a larger JSON object.
+        function extractDataArray(data) {
+            // If the data is already an array, return it directly.
+            if (Array.isArray(data)) {
+                return data;
+            }
+
+            // If it's a single object, search for the most likely array to compare.
+            if (typeof data === 'object' && data !== null) {
+                let longestArray = null;
+                let maxLength = 0;
+
+                // Iterate over the object's values to find the longest array of objects.
+                for (const key in data) {
+                    const value = data[key];
+                    // Check if the value is an array and is longer than any we've found so far.
+                    if (Array.isArray(value) && value.length > maxLength) {
+                        // We only care about arrays that contain objects.
+                        if (value.length === 0 || (value.length > 0 && typeof value[0] === 'object')) {
+                           longestArray = value;
+                           maxLength = value.length;
+                        }
+                    }
+                }
+
+                // If we found a suitable array, return it.
+                if (longestArray) {
+                    console.log("Found nested array to compare.");
+                    return longestArray;
+                }
+
+                // If no nested array was found, treat the entire object as a single item to compare.
+                return [data];
+            }
+            
+            // For any other data type, return it wrapped in an array.
+            return [data];
+        }
+
+
+        // UPDATED: This function now uses extractDataArray to handle nested data.
+        function parseInput(input) {
+            if (!input || !input.trim()) {
+                return [];
+            }
+            
+            let trimmed = input.trim();
+            let parsedData;
+            
+            try {
+                // First, try to parse as standard JSON
+                parsedData = JSON.parse(trimmed);
+            } catch (e) {
+                console.log("Not valid JSON, trying Python dictionary format");
+                // If JSON parsing fails, fall back to the custom Python-like parser
+                try {
+                    parsedData = bruteForceParsePythonDicts(trimmed);
+                } catch (err) {
+                    throw new Error("Failed to parse input as JSON or Python dictionary: " + err.message);
+                }
+            }
+
+            // After parsing, extract the primary array of dictionaries for comparison.
+            return extractDataArray(parsedData);
+        }
+        
+        // Create a signature for a dictionary based on matching keys
+        function createDictSignature(dict, matchingKeys) {
+            const signature = {};
+            for (const key of matchingKeys) {
+                if (key in dict) {
+                    signature[key] = dict[key];
+                }
+            }
+            return JSON.stringify(signature);
+        }
+        
+        // Match dictionaries based on content similarity
+        function matchDictionaries(dicts1, dicts2, matchingKeys) {
+            const matches = [];
+            const unmatched1 = [];
+            const unmatched2 = [...dicts2];
+            
+            // If no matching keys specified, try to find best matches using all keys
+            if (matchingKeys.length === 0) {
+                for (let i = 0; i < dicts1.length; i++) {
+                    const dict1 = dicts1[i];
+                    let bestMatch = -1;
+                    let bestScore = -1;
+                    
+                    for (let j = 0; j < unmatched2.length; j++) {
+                        const dict2 = unmatched2[j];
+                        const score = calculateSimilarity(dict1, dict2);
+                        
+                        if (score > bestScore) {
+                            bestScore = score;
+                            bestMatch = j;
+                        }
+                    }
+                    
+                    if (bestMatch !== -1 && bestScore > 0.5) {
+                        matches.push({
+                            dict1: dict1,
+                            dict2: unmatched2[bestMatch],
+                            index1: i,
+                            index2: dicts2.indexOf(unmatched2[bestMatch]),
+                            score: bestScore
+                        });
+                        unmatched2.splice(bestMatch, 1);
+                    } else {
+                        unmatched1.push({ dict: dict1, index: i });
+                    }
+                }
+            } else {
+                // Use matching keys for exact matching
+                const signatures2 = new Map();
+                
+                for (let i = 0; i < dicts2.length; i++) {
+                    const signature = createDictSignature(dicts2[i], matchingKeys);
+                    signatures2.set(signature, { dict: dicts2[i], index: i });
+                }
+                
+                for (let i = 0; i < dicts1.length; i++) {
+                    const dict1 = dicts1[i];
+                    const signature = createDictSignature(dict1, matchingKeys);
+                    
+                    if (signatures2.has(signature)) {
+                        const match = signatures2.get(signature);
+                        matches.push({
+                            dict1: dict1,
+                            dict2: match.dict,
+                            index1: i,
+                            index2: match.index,
+                            score: 1.0
+                        });
+                        signatures2.delete(signature);
+                        
+                        // Remove from unmatched2
+                        const unmatchedIndex = unmatched2.findIndex(d => d === match.dict);
+                        if (unmatchedIndex !== -1) {
+                            unmatched2.splice(unmatchedIndex, 1);
+                        }
+                    } else {
+                        unmatched1.push({ dict: dict1, index: i });
+                    }
+                }
+            }
+            
+            return {
+                matches: matches,
+                unmatched1: unmatched1,
+                unmatched2: unmatched2.map((dict, idx) => ({ 
+                    dict: dict, 
+                    index: dicts2.indexOf(dict) 
+                }))
+            };
+        }
+        
+        // Calculate similarity between two dictionaries
+        function calculateSimilarity(dict1, dict2) {
+            const keys1 = new Set(Object.keys(dict1));
+            const keys2 = new Set(Object.keys(dict2));
+            
+            const commonKeys = [...keys1].filter(key => keys2.has(key));
+            const totalKeys = new Set([...keys1, ...keys2]).size;
+            
+            if (totalKeys === 0) return 0;
+            
+            let matchingValues = 0;
+            
+            for (const key of commonKeys) {
+                if (JSON.stringify(dict1[key]) === JSON.stringify(dict2[key])) {
+                    matchingValues++;
+                }
+            }
+            
+            return (commonKeys.length + matchingValues) / (totalKeys + commonKeys.length);
+        }
+        
+        // Compare two objects
+        function compareDicts(dict1, dict2, options) {
+            const differences = {
+                differentValues: {},
+                onlyInFirst: {},
+                onlyInSecond: {}
+            };
+            
+            const keysToIgnore = new Set(options.ignoreKeys);
+            
+            function normalizeValue(value) {
+                if (value === null || value === undefined) {
+                    return options.ignoreNone ? null : value;
+                }
+                
+                if (typeof value === 'string') {
+                    let normalized = value;
+                    
+                    if (options.ignoreWhitespace) {
+                        normalized = normalized.replace(/\s+/g, ' ').trim();
+                    }
+                    
+                    if (options.ignoreCase) {
+                        normalized = normalized.toLowerCase();
+                    }
+                    
+                    return normalized;
+                }
+                
+                return value;
+            }
+            
+            for (const key in dict1) {
+                if (keysToIgnore.has(key)) continue;
+                
+                if (key in dict2) {
+                    const val1 = normalizeValue(dict1[key]);
+                    const val2 = normalizeValue(dict2[key]);
+                    
+                    if (JSON.stringify(val1) !== JSON.stringify(val2)) {
+                        differences.differentValues[key] = {
+                            first: dict1[key],
+                            second: dict2[key]
+                        };
+                    }
+                } else {
+                    differences.onlyInFirst[key] = dict1[key];
+                }
+            }
+            
+            for (const key in dict2) {
+                if (keysToIgnore.has(key) || key in dict1) continue;
+                differences.onlyInSecond[key] = dict2[key];
+            }
+            
+            return differences;
+        }
+        
+        // Check if there are differences
+        function hasDifferences(diff) {
+            return Object.keys(diff.differentValues).length > 0 || 
+                   Object.keys(diff.onlyInFirst).length > 0 || 
+                   Object.keys(diff.onlyInSecond).length > 0;
+        }
+        
+        // Create a section with details
+        function createSection(title, content, isEmpty = false) {
+            const className = isEmpty ? "match" : "diff";
+            return `
+                <h4 class="${className}">${title} ${isEmpty ? "(No differences)" : ""}</h4>
+                ${!isEmpty ? `<pre>${content}</pre>` : ""}
+            `;
+        }
+        
+        // Handle comparison button click
+        document.getElementById("compareBtn").addEventListener("click", function() {
+            const resultsDiv = document.getElementById("results");
+            
+            const options = {
+                ignoreCase: document.getElementById("ignoreCase").checked,
+                ignoreWhitespace: document.getElementById("ignoreWhitespace").checked,
+                ignoreNone: document.getElementById("ignoreNone").checked,
+                ignoreKeys: document.getElementById("ignoreKeys").value
+                    .split(",")
+                    .map(k => k.trim())
+                    .filter(k => k !== ""),
+                matchingKeys: document.getElementById("matchingKeys").value
+                    .split(",")
+                    .map(k => k.trim())
+                    .filter(k => k !== ""),
+                enableOrderMatching: document.getElementById("enableOrderMatching").checked
+            };
+            
+            try {
+                const dicts1 = getInputData(1);
+                const dicts2 = getInputData(2);
+                
+                if (dicts1.length === 0 || dicts2.length === 0) {
+                    resultsDiv.innerHTML = '<div class="error">Could not parse dictionaries from input</div>';
+                    return;
+                }
+                
+                let resultsHtml = "<h2>Comparison Results</h2>";
+                
+                if (dicts1.length === 1 && dicts2.length === 1) {
+                    // Single dictionary comparison
+                    const differences = compareDicts(dicts1[0], dicts2[0], options);
+                    
+                    if (!hasDifferences(differences)) {
+                        resultsHtml += '<div class="match">The dictionaries are identical (considering your comparison options).</div>';
+                    } else {
+                        resultsHtml += createSection(
+                            "Keys with Different Values:", 
+                            JSON.stringify(differences.differentValues, null, 2),
+                            Object.keys(differences.differentValues).length === 0
+                        );
+                        
+                        resultsHtml += createSection(
+                            "Keys Only in First Dictionary:", 
+                            JSON.stringify(differences.onlyInFirst, null, 2),
+                            Object.keys(differences.onlyInFirst).length === 0
+                        );
+                        
+                        resultsHtml += createSection(
+                            "Keys Only in Second Dictionary:", 
+                            JSON.stringify(differences.onlyInSecond, null, 2),
+                            Object.keys(differences.onlyInSecond).length === 0
+                        );
+                    }
+                } else {
+                    // Multiple dictionaries comparison
+                    if (options.enableOrderMatching) {
+                        const matchResult = matchDictionaries(dicts1, dicts2, options.matchingKeys);
+                        
+                        // Calculate identical vs different matches first
+                        const identical = [];
+                        const different = [];
+                        
+                        for (const match of matchResult.matches) {
+                            const differences = compareDicts(match.dict1, match.dict2, options);
+                            
+                            if (hasDifferences(differences)) {
+                                different.push({
+                                    match: match,
+                                    differences: differences
+                                });
+                            } else {
+                                identical.push(match);
+                            }
+                        }
+                        
+                        resultsHtml += `
+                            <div class="summary">
+                                <h3>Matching Summary</h3>
+                                Total dictionaries in set 1: ${dicts1.length}<br>
+                                Total dictionaries in set 2: ${dicts2.length}<br>
+                                <span class="match">Successfully matched: ${matchResult.matches.length}</span><br>
+                                <span class="match">├─ Identical matches: ${identical.length}</span><br>
+                                <span class="diff">├─ Matches with differences: ${different.length}</span><br>
+                                <span class="warning">Unmatched in set 1: ${matchResult.unmatched1.length}</span><br>
+                                <span class="warning">Unmatched in set 2: ${matchResult.unmatched2.length}</span>
+                            </div>
+                        `;
+                        
+                        // Show matching information in collapsible section (moved to end)
+                        let matchingInfoHtml = '';
+                        if (matchResult.matches.length > 0) {
+                            matchingInfoHtml = `
+                                <button class="collapsible" onclick="toggleCollapsible(this)">
+                                    <span>Dictionary Matching Information</span>
+                                    <span class="collapsible-arrow">▶</span>
+                                </button>
+                                <div class="collapsible-content">
+                                    <div class="matching-info">
+                                        <h4>Matched Dictionary Pairs</h4>
+                            `;
+                            for (const match of matchResult.matches) {
+                                matchingInfoHtml += `<p>Set 1 #${match.index1 + 1} ↔ Set 2 #${match.index2 + 1} (Similarity: ${(match.score * 100).toFixed(1)}%)</p>`;
+                            }
+                            matchingInfoHtml += `
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        // Show unmatched dictionaries
+                        if (matchResult.unmatched1.length > 0) {
+                            resultsHtml += '<div class="unmatched">';
+                            resultsHtml += '<h3>Unmatched Dictionaries from Set 1</h3>';
+                            for (const unmatched of matchResult.unmatched1) {
+                                resultsHtml += `<h4>Dictionary #${unmatched.index + 1}</h4>`;
+                                resultsHtml += `<pre>${JSON.stringify(unmatched.dict, null, 2)}</pre>`;
+                            }
+                            resultsHtml += '</div>';
+                        }
+                        
+                        if (matchResult.unmatched2.length > 0) {
+                            resultsHtml += '<div class="unmatched">';
+                            resultsHtml += '<h3>Unmatched Dictionaries from Set 2</h3>';
+                            for (const unmatched of matchResult.unmatched2) {
+                                resultsHtml += `<h4>Dictionary #${unmatched.index + 1}</h4>`;
+                                resultsHtml += `<pre>${JSON.stringify(unmatched.dict, null, 2)}</pre>`;
+                            }
+                            resultsHtml += '</div>';
+                        }
+                        
+                        // Show differences for matched dictionaries
+                        if (identical.length > 0) {
+                            resultsHtml += `<div class="match"><h3>✓ ${identical.length} Identical Matched Dictionaries</h3></div>`;
+                        }
+                        
+                        // Show details for different matched dictionaries
+                        if (different.length > 0) {
+                            resultsHtml += `<div class="diff"><h3>⚠ ${different.length} Matched Dictionaries with Differences</h3></div>`;
+                        }
+                        
+                        // Show details for different matched dictionaries
+                        for (const diff of different) {
+                            resultsHtml += `<h3 class="diff">Differences: Set 1 #${diff.match.index1 + 1} ↔ Set 2 #${diff.match.index2 + 1}</h3>`;
+                            
+                            const differences = diff.differences;
+                            
+                            resultsHtml += createSection(
+                                "Keys with Different Values:", 
+                                JSON.stringify(differences.differentValues, null, 2),
+                                Object.keys(differences.differentValues).length === 0
+                            );
+                            
+                            resultsHtml += createSection(
+                                "Keys Only in First Dictionary:", 
+                                JSON.stringify(differences.onlyInFirst, null, 2),
+                                Object.keys(differences.onlyInFirst).length === 0
+                            );
+                            
+                            resultsHtml += createSection(
+                                "Keys Only in Second Dictionary:", 
+                                JSON.stringify(differences.onlyInSecond, null, 2),
+                                Object.keys(differences.onlyInSecond).length === 0
+                            );
+                        }
+                        
+                        // Add matching information at the end
+                        resultsHtml += matchingInfoHtml;
+                        
+                    } else {
+                        // Original order-based comparison
+                        if (dicts1.length !== dicts2.length) {
+                            resultsHtml += `<div class="error">Number of dictionaries doesn't match: ${dicts1.length} vs ${dicts2.length}</div>`;
+                            return;
+                        }
+                        
+                        const identical = [];
+                        const different = [];
+                        
+                        for (let i = 0; i < dicts1.length; i++) {
+                            const differences = compareDicts(dicts1[i], dicts2[i], options);
+                            
+                            if (hasDifferences(differences)) {
+                                different.push({
+                                    index: i,
+                                    differences: differences
+                                });
+                            } else {
+                                identical.push(i);
+                            }
+                        }
+                        
+                        resultsHtml += `
+                            <div class="summary">
+                                Total dictionaries: ${dicts1.length}<br>
+                                <span class="match">Identical: ${identical.length}</span><br>
+                                <span class="diff">Different: ${different.length}</span>
+                            </div>
+                        `;
+                        
+                        // Show details for each difference
+                        for (const diff of different) {
+                            resultsHtml += `<h3>Dictionary #${diff.index + 1} Differences</h3>`;
+                            
+                            const differences = diff.differences;
+                            
+                            resultsHtml += createSection(
+                                "Keys with Different Values:", 
+                                JSON.stringify(differences.differentValues, null, 2),
+                                Object.keys(differences.differentValues).length === 0
+                            );
+                            
+                            resultsHtml += createSection(
+                                "Keys Only in First Dictionary:", 
+                                JSON.stringify(differences.onlyInFirst, null, 2),
+                                Object.keys(differences.onlyInFirst).length === 0
+                            );
+                            
+                            resultsHtml += createSection(
+                                "Keys Only in Second Dictionary:", 
+                                JSON.stringify(differences.onlyInSecond, null, 2),
+                                Object.keys(differences.onlyInSecond).length === 0
+                            );
+                        }
+                    }
+                }
+                
+                resultsDiv.innerHTML = resultsHtml;
+            } catch (error) {
+                resultsDiv.innerHTML = `<div class="error">Error: ${error.message}</div>`;
+            }
+        });
+    </script>
+</body>
+</html>
