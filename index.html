@@ -145,6 +145,12 @@
             border-radius: 4px;
             width: 100%;
         }
+        .type-diff {
+            background-color: #fff3cd;
+            padding: 2px 4px;
+            border-radius: 3px;
+            font-size: 0.9em;
+        }
     </style>
 </head>
 <body>
@@ -154,6 +160,13 @@
         
         <div class="options">
             <h3>Comparison Options</h3>
+            <div class="option-item">
+                <label>
+                    <input type="checkbox" id="strictNumbers" checked> 
+                    Strict number comparison (treat 1 and 1.0 as different)
+                </label>
+                <div class="note">When enabled, integers and floats are treated as different types</div>
+            </div>
             <div class="option-item">
                 <label>
                     <input type="checkbox" id="ignoreCase" checked> 
@@ -246,9 +259,11 @@
     </div>
     
     <script>
-        // Global variables to store file data
+        // Global variables to store file data and original text
         let fileData1 = null;
         let fileData2 = null;
+        let originalText1 = null;
+        let originalText2 = null;
         
         // Handle input type switching
         document.addEventListener('DOMContentLoaded', function() {
@@ -369,11 +384,43 @@
                 return extractDataArray(data);
             } else {
                 const textInput = document.getElementById(`dict${inputNumber}`).value;
-                return parseInput(textInput);
+                // Store the original text for type preservation
+                if (inputNumber === 1) {
+                    originalText1 = textInput;
+                } else {
+                    originalText2 = textInput;
+                }
+                return parseInput(textInput, inputNumber);
             }
         }
-        // Special brute-force parser for Python dictionaries
-        function bruteForceParsePythonDicts(input) {
+        
+        // Check if a value is an integer in the original text
+        function isIntegerInOriginal(value, key, dictIndex, datasetNumber) {
+            if (typeof value !== 'number') return false;
+            
+            const originalText = datasetNumber === 1 ? originalText1 : originalText2;
+            if (!originalText) return false;
+            
+            // Look for patterns like 'key': value or "key": value
+            const patterns = [
+                new RegExp(`['"]${key}['"]\\s*:\\s*(${value})(?:[,\\s}])`, 'g'),
+                new RegExp(`${key}\\s*:\\s*(${value})(?:[,\\s}])`, 'g')
+            ];
+            
+            for (const pattern of patterns) {
+                const matches = [...originalText.matchAll(pattern)];
+                if (matches.length > 0) {
+                    // Check if the matched value has a decimal point
+                    const matchedValue = matches[0][1];
+                    return !matchedValue.includes('.');
+                }
+            }
+            
+            return false;
+        }
+        
+        // Special brute-force parser for Python dictionaries with type preservation
+        function bruteForceParsePythonDicts(input, datasetNumber) {
             const dicts = [];
             let start = -1;
             let braceCount = 0;
@@ -390,7 +437,7 @@
                     if (braceCount === 0 && start !== -1) {
                         const dictStr = input.substring(start, i + 1);
                         try {
-                            const dict = processPythonDict(dictStr);
+                            const dict = processPythonDict(dictStr, datasetNumber);
                             dicts.push(dict);
                         } catch (e) {
                             console.error("Error processing dictionary:", e.message);
@@ -403,8 +450,21 @@
             return dicts;
         }
         
-        // Process a single Python dictionary string
-        function processPythonDict(dictStr) {
+        // Process a single Python dictionary string with type information
+        function processPythonDict(dictStr, datasetNumber) {
+            // Store original number representations
+            const numberMap = new Map();
+            
+            // Find all number values and their original representation
+            const numberPattern = /(['"]?)([^'":\s,{}]+)\1\s*:\s*(-?\d+\.?\d*)/g;
+            let match;
+            while ((match = numberPattern.exec(dictStr)) !== null) {
+                const key = match[2];
+                const valueStr = match[3];
+                const hasDecimal = valueStr.includes('.');
+                numberMap.set(key, { original: valueStr, hasDecimal: hasDecimal });
+            }
+            
             let processed = dictStr
                 .replace(/None/g, "null")
                 .replace(/True/g, "true")
@@ -417,13 +477,40 @@
                 .replace(/:\s*'([^']*)'/g, ':"$1"');
             
             try {
-                return JSON.parse(processed);
+                const parsed = JSON.parse(processed);
+                
+                // Add type information for numbers
+                for (const [key, info] of numberMap) {
+                    if (key in parsed && typeof parsed[key] === 'number') {
+                        // Store type information in a special metadata property
+                        if (!parsed.__typeInfo) {
+                            Object.defineProperty(parsed, '__typeInfo', {
+                                value: {},
+                                enumerable: false,
+                                writable: true
+                            });
+                        }
+                        parsed.__typeInfo[key] = info.hasDecimal ? 'float' : 'int';
+                        
+                        // Also store the original string representation
+                        if (!parsed.__originalValues) {
+                            Object.defineProperty(parsed, '__originalValues', {
+                                value: {},
+                                enumerable: false,
+                                writable: true
+                            });
+                        }
+                        parsed.__originalValues[key] = info.original;
+                    }
+                }
+                
+                return parsed;
             } catch (e) {
                 throw new Error(`Failed to parse dict: ${e.message}`);
             }
         }
         
-        // NEW: Function to find the primary array of objects within a larger JSON object.
+        // Function to find the primary array of objects within a larger JSON object.
         function extractDataArray(data) {
             // If the data is already an array, return it directly.
             if (Array.isArray(data)) {
@@ -462,9 +549,8 @@
             return [data];
         }
 
-
         // UPDATED: This function now uses extractDataArray to handle nested data.
-        function parseInput(input) {
+        function parseInput(input, datasetNumber) {
             if (!input || !input.trim()) {
                 return [];
             }
@@ -479,7 +565,7 @@
                 console.log("Not valid JSON, trying Python dictionary format");
                 // If JSON parsing fails, fall back to the custom Python-like parser
                 try {
-                    parsedData = bruteForceParsePythonDicts(trimmed);
+                    parsedData = bruteForceParsePythonDicts(trimmed, datasetNumber);
                 } catch (err) {
                     throw new Error("Failed to parse input as JSON or Python dictionary: " + err.message);
                 }
@@ -583,8 +669,8 @@
         
         // Calculate similarity between two dictionaries
         function calculateSimilarity(dict1, dict2) {
-            const keys1 = new Set(Object.keys(dict1));
-            const keys2 = new Set(Object.keys(dict2));
+            const keys1 = new Set(Object.keys(dict1).filter(k => k !== '__typeInfo'));
+            const keys2 = new Set(Object.keys(dict2).filter(k => k !== '__typeInfo'));
             
             const commonKeys = [...keys1].filter(key => keys2.has(key));
             const totalKeys = new Set([...keys1, ...keys2]).size;
@@ -602,6 +688,67 @@
             return (commonKeys.length + matchingValues) / (totalKeys + commonKeys.length);
         }
         
+        // Check if values are strictly equal considering type
+        function areValuesStrictlyEqual(val1, val2, key, dict1, dict2, options) {
+            // Handle null/undefined cases
+            if (val1 === null || val1 === undefined || val2 === null || val2 === undefined) {
+                if (options.ignoreNone && (val1 === null || val1 === undefined) && (val2 === null || val2 === undefined)) {
+                    return true;
+                }
+                return val1 === val2;
+            }
+            
+            // Handle number comparison with strict type checking
+            if (typeof val1 === 'number' && typeof val2 === 'number') {
+                if (options.strictNumbers) {
+                    // Check if the types are different (int vs float)
+                    const type1 = dict1.__typeInfo && dict1.__typeInfo[key] || (Number.isInteger(val1) ? 'int' : 'float');
+                    const type2 = dict2.__typeInfo && dict2.__typeInfo[key] || (Number.isInteger(val2) ? 'int' : 'float');
+                    
+                    // If one is explicitly an int and the other is a float, they're different
+                    if (type1 !== type2) {
+                        return false;
+                    }
+                }
+                return val1 === val2;
+            }
+            
+            // Handle string comparison
+            if (typeof val1 === 'string' && typeof val2 === 'string') {
+                let normalized1 = val1;
+                let normalized2 = val2;
+                
+                if (options.ignoreWhitespace) {
+                    normalized1 = normalized1.replace(/\s+/g, ' ').trim();
+                    normalized2 = normalized2.replace(/\s+/g, ' ').trim();
+                }
+                
+                if (options.ignoreCase) {
+                    normalized1 = normalized1.toLowerCase();
+                    normalized2 = normalized2.toLowerCase();
+                }
+                
+                return normalized1 === normalized2;
+            }
+            
+            // For other types, use JSON comparison
+            return JSON.stringify(val1) === JSON.stringify(val2);
+        }
+        
+        // Format value with type information
+        function formatValueWithType(value, key, dict) {
+            if (typeof value === 'number') {
+                const typeInfo = dict.__typeInfo && dict.__typeInfo[key];
+                if (typeInfo) {
+                    return `${value} <span class="type-diff">(${typeInfo})</span>`;
+                } else {
+                    const inferredType = Number.isInteger(value) ? 'int' : 'float';
+                    return `${value} <span class="type-diff">(${inferredType})</span>`;
+                }
+            }
+            return JSON.stringify(value);
+        }
+        
         // Compare two objects
         function compareDicts(dict1, dict2, options) {
             const differences = {
@@ -612,39 +759,23 @@
             
             const keysToIgnore = new Set(options.ignoreKeys);
             
-            function normalizeValue(value) {
-                if (value === null || value === undefined) {
-                    return options.ignoreNone ? null : value;
-                }
-                
-                if (typeof value === 'string') {
-                    let normalized = value;
-                    
-                    if (options.ignoreWhitespace) {
-                        normalized = normalized.replace(/\s+/g, ' ').trim();
-                    }
-                    
-                    if (options.ignoreCase) {
-                        normalized = normalized.toLowerCase();
-                    }
-                    
-                    return normalized;
-                }
-                
-                return value;
-            }
-            
             for (const key in dict1) {
-                if (keysToIgnore.has(key)) continue;
+                if (keysToIgnore.has(key) || key === '__typeInfo' || key === '__originalValues') continue;
                 
                 if (key in dict2) {
-                    const val1 = normalizeValue(dict1[key]);
-                    const val2 = normalizeValue(dict2[key]);
+                    const val1 = dict1[key];
+                    const val2 = dict2[key];
                     
-                    if (JSON.stringify(val1) !== JSON.stringify(val2)) {
+                    if (!areValuesStrictlyEqual(val1, val2, key, dict1, dict2, options)) {
                         differences.differentValues[key] = {
                             first: dict1[key],
-                            second: dict2[key]
+                            second: dict2[key],
+                            firstOriginal: dict1.__originalValues && dict1.__originalValues[key],
+                            secondOriginal: dict2.__originalValues && dict2.__originalValues[key],
+                            firstType: dict1.__typeInfo && dict1.__typeInfo[key],
+                            secondType: dict2.__typeInfo && dict2.__typeInfo[key],
+                            firstFormatted: formatValueWithType(val1, key, dict1),
+                            secondFormatted: formatValueWithType(val2, key, dict2)
                         };
                     }
                 } else {
@@ -653,7 +784,7 @@
             }
             
             for (const key in dict2) {
-                if (keysToIgnore.has(key) || key in dict1) continue;
+                if (keysToIgnore.has(key) || key === '__typeInfo' || key === '__originalValues' || key in dict1) continue;
                 differences.onlyInSecond[key] = dict2[key];
             }
             
@@ -668,7 +799,7 @@
         }
         
         // Create a section with details
-        function createSection(title, content, isEmpty = false) {
+        function createSection(title, content, isEmpty = false, useFormattedValues = false) {
             const className = isEmpty ? "match" : "diff";
             return `
                 <h4 class="${className}">${title} ${isEmpty ? "(No differences)" : ""}</h4>
@@ -676,11 +807,65 @@
             `;
         }
         
+        // Format differences for display
+        function formatDifferences(differences) {
+            let result = "{\n";
+            const keys = Object.keys(differences);
+            
+            keys.forEach((key, index) => {
+                const diff = differences[key];
+                result += `  "${key}": {\n`;
+                
+                // Format first value
+                let firstDisplay;
+                if (typeof diff.first === 'number') {
+                    const type1 = diff.firstType || (Number.isInteger(diff.first) ? 'int' : 'float');
+                    if (type1 === 'int') {
+                        firstDisplay = diff.first.toString();
+                    } else {
+                        firstDisplay = Number.isInteger(diff.first) ? diff.first + '.0' : diff.first.toString();
+                    }
+                } else if (typeof diff.first === 'string') {
+                    firstDisplay = JSON.stringify(diff.first);
+                } else {
+                    firstDisplay = JSON.stringify(diff.first);
+                }
+                
+                // Format second value
+                let secondDisplay;
+                if (typeof diff.second === 'number') {
+                    const type2 = diff.secondType || (Number.isInteger(diff.second) ? 'int' : 'float');
+                    if (type2 === 'int') {
+                        secondDisplay = diff.second.toString();
+                    } else {
+                        secondDisplay = Number.isInteger(diff.second) ? diff.second + '.0' : diff.second.toString();
+                    }
+                } else if (typeof diff.second === 'string') {
+                    secondDisplay = JSON.stringify(diff.second);
+                } else {
+                    secondDisplay = JSON.stringify(diff.second);
+                }
+                
+                result += `    "first": ${firstDisplay},\n`;
+                result += `    "second": ${secondDisplay}\n`;
+                result += `  }`;
+                
+                if (index < keys.length - 1) {
+                    result += ',';
+                }
+                result += '\n';
+            });
+            
+            result += "}";
+            return result;
+        }
+        
         // Handle comparison button click
         document.getElementById("compareBtn").addEventListener("click", function() {
             const resultsDiv = document.getElementById("results");
             
             const options = {
+                strictNumbers: document.getElementById("strictNumbers").checked,
                 ignoreCase: document.getElementById("ignoreCase").checked,
                 ignoreWhitespace: document.getElementById("ignoreWhitespace").checked,
                 ignoreNone: document.getElementById("ignoreNone").checked,
@@ -715,7 +900,7 @@
                     } else {
                         resultsHtml += createSection(
                             "Keys with Different Values:", 
-                            JSON.stringify(differences.differentValues, null, 2),
+                            formatDifferences(differences.differentValues),
                             Object.keys(differences.differentValues).length === 0
                         );
                         
@@ -826,7 +1011,7 @@
                             
                             resultsHtml += createSection(
                                 "Keys with Different Values:", 
-                                JSON.stringify(differences.differentValues, null, 2),
+                                formatDifferences(differences.differentValues),
                                 Object.keys(differences.differentValues).length === 0
                             );
                             
@@ -885,7 +1070,7 @@
                             
                             resultsHtml += createSection(
                                 "Keys with Different Values:", 
-                                JSON.stringify(differences.differentValues, null, 2),
+                                formatDifferences(differences.differentValues),
                                 Object.keys(differences.differentValues).length === 0
                             );
                             
